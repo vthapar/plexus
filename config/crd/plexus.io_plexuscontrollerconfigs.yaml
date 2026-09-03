@@ -64,6 +64,8 @@ spec:
                       In multi-cluster deployments, both the hub and each spoke cluster
                       must have an FRRConfiguration matching this selector for BGP
                       advertisements to be established.
+                      The Plexus controller reads the ASN from this FRRConfiguration's
+                      spec.bgp.routers[].asn for use in route-leaking FRR config.
                     properties:
                       matchExpressions:
                         description: matchExpressions is a list of label selector

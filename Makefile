@@ -133,3 +133,18 @@ kind-multi: ## Create a multi-cluster (hub + 1 spoke) Plexus dev environment
 .PHONY: kind-delete
 kind-delete: ## Tear down all Plexus KIND clusters
 	@contrib/plexus-kind-multi.sh --delete 2>/dev/null; contrib/plexus-kind.sh --delete 2>/dev/null; true
+
+E2E_HUB_KUBECONFIG   ?= $(HOME)/plexus-hub.conf
+E2E_SPOKE_KUBECONFIG ?= $(HOME)/plexus-spoke-1.conf
+E2E_AND              ?= production
+E2E_TIMEOUT          ?= 180
+E2E_CLEANUP          ?= --cleanup
+
+.PHONY: e2e-multi
+e2e-multi: ## Run e2e validation and datapath tests on a deployed kind-multi setup
+	contrib/plexus-test-e2e.sh \
+		--hub-kubeconfig   $(E2E_HUB_KUBECONFIG) \
+		--spoke-kubeconfig $(E2E_SPOKE_KUBECONFIG) \
+		--and              $(E2E_AND) \
+		--timeout          $(E2E_TIMEOUT) \
+		$(E2E_CLEANUP)

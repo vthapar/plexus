@@ -532,7 +532,8 @@ create_spoke_secret() {
 
   local patched_kubeconfig
   patched_kubeconfig=$(echo "$raw_kubeconfig" | \
-    sed "s|server: https://127.0.0.1:[0-9]*|server: ${spoke_api_url}|")
+    sed "s|server: https://127.0.0.1:[0-9]*|server: ${spoke_api_url}|" | \
+    sed 's|    certificate-authority-data:.*|    insecure-skip-tls-verify: true|')
 
   KUBECONFIG="$hub_kubeconfig" kubectl create namespace plexus-system 2>/dev/null || true
 

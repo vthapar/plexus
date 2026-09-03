@@ -28,12 +28,16 @@
 # ╔════════════════════════════════════════════════════════════════════════════════════════════════╗
 # ║  DOCKER HOST                                                                                   ║
 # ║                                                                                                ║
-# ║  Networks:  plexus-hub     192.168.11.0/24 ──gw 192.168.11.1  iptables DOCKER-USER:           ║
-# ║             plexus-spoke-1 192.168.12.0/24 ──gw 192.168.12.1  • cluster ↔ cluster (FRR BGP)  ║
-# ║             plexus-spoke-2 192.168.13.0/24 ──gw 192.168.13.1  • kind ↔ cluster (EVPN Geneve) ║
-# ║             kind (bridge)  172.18.0.0/16   ──gw 172.18.0.1    (setup_inter_cluster_routing)   ║
+# ║  Networks:  plexus-hub     192.168.11.0/24 ──gw 192.168.11.1                                  ║
+# ║             plexus-spoke-1 192.168.12.0/24 ──gw 192.168.12.1                                  ║
+# ║             plexus-spoke-2 192.168.13.0/24 ──gw 192.168.13.1                                  ║
+# ║             kind (bridge)  172.18.0.0/16   ──gw 172.18.0.1                                    ║
+# ║                                                                                                ║
+# ║  iptables DOCKER-USER — all pairs, all clusters (setup_inter_cluster_routing):                 ║
+# ║    • cluster ↔ cluster  e.g. 192.168.11.0/24 ↔ 192.168.12.0/24  (FRR BGP peering)            ║
+# ║    • kind    ↔ cluster  e.g. 172.18.0.0/16   ↔ 192.168.12.0/24  (EVPN Geneve via breth1)     ║
 # ╚══════════════╤═══════════════════════════╤══════════════════════════╤══════════════════════════╝
-#                │ (KIND_EXPERIMENTAL_DOCKER_NETWORK=plexus-hub/spoke-N)│
+#                │                           │                          │
 #   ┌────────────▼──────────────┐ ┌──────────▼──────────────┐ ┌─────────▼───────────────┐
 #   │ plexus-hub                │ │ plexus-spoke-1          │ │ plexus-spoke-2          │
 #   │ 192.168.11.0/24           │ │ 192.168.12.0/24         │ │ 192.168.13.0/24         │
@@ -41,15 +45,14 @@
 #   │ Svc CIDR: 10.97.0.0/16    │ │ Svc CIDR: 10.98.0.0/16  │ │ Svc CIDR: 10.99.0.0/16  │
 #   │                           │ │                         │ │                         │
 #   │ Per node (2 interfaces):  │ │ Per node (2 interfaces):│ │ Per node (2 interfaces):│
-#   │  eth0    192.168.11.x/24  │ │  eth0  192.168.12.x/24  │ │  eth0  192.168.13.x/24  │
+#   │  eth0   192.168.11.x/24   │ │  eth0  192.168.12.x/24  │ │  eth0  192.168.13.x/24  │
 #   │  eth1 ─► breth1 (OVS)    │ │  eth1 ─► breth1 (OVS)  │ │  eth1 ─► breth1 (OVS)  │
-#   │    breth1  172.18.0.x/16  │ │    breth1 172.18.0.x/16 │ │    breth1 172.18.0.x/16 │
-#   │    breth1  169.254.0.2/17 │ │    breth1 169.254.0.2   │ │    breth1 169.254.0.2   │
-#   │  mp0     10.245.{0,1}.2   │ │  mp0    10.246.{0,1}.2  │ │  mp0    10.247.{0,1}.2  │
+#   │   breth1: 172.18.0.x/16  │ │   breth1: 172.18.0.x/16 │ │   breth1: 172.18.0.x/16 │
+#   │   breth1: 169.254.0.2/17 │ │   breth1: 169.254.0.2   │ │   breth1: 169.254.0.2   │
+#   │  mp0:   10.245.{0,1}.2   │ │  mp0:   10.246.{0,1}.2  │ │  mp0:   10.247.{0,1}.2  │
 #   │                           │ │                         │ │                         │
-#   │ Default route + cross-    │ │ Default route + cross-  │ │ Default route + cross-  │
-#   │ cluster routes via breth1 │ │ cluster routes via breth1│ │ cluster routes via breth1│
-#   │  default → 172.18.0.1     │ │  default → 172.18.0.1   │ │  default → 172.18.0.1   │
+#   │ Routes (via breth1):      │ │ Routes (via breth1):    │ │ Routes (via breth1):    │
+#   │  default → 172.18.0.1    │ │  default → 172.18.0.1   │ │  default → 172.18.0.1   │
 #   │  .12.0/24 → 172.18.0.1   │ │  .11.0/24 → 172.18.0.1  │ │  .11.0/24 → 172.18.0.1  │
 #   │  .13.0/24 → 172.18.0.1   │ │  .13.0/24 → 172.18.0.1  │ │  .12.0/24 → 172.18.0.1  │
 #   └──────────┬────────────────┘ └──────────┬──────────────┘ └─────────┬───────────────┘
@@ -61,9 +64,9 @@
 #                  ┌─────────▼───────────────────────────────┐
 #                  │  plexus-frr  (iBGP route reflector)     │
 #                  │  AS 64512                               │
-#                  │  eth0: 192.168.11.4 (plexus-hub net)    │
-#                  │  eth1: 192.168.12.4 (plexus-spoke-1 net)│
-#                  │  eth2: 192.168.13.4 (plexus-spoke-2 net)│
+#                  │  192.168.11.4 on plexus-hub net         │
+#                  │  192.168.12.4 on plexus-spoke-1 net     │
+#                  │  192.168.13.4 on plexus-spoke-2 net     │
 #                  └─────────────────────────────────────────┘
 #
 # EVPN overlay — AND "production" UDN subnets (across all clusters via EVPN):
