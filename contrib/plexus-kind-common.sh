@@ -2,13 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Shared helpers for Plexus KIND cluster scripts.
-# Sourced by plexus-kind.sh and plexus-kind-multi.sh.
+# Sourced by plexus-kind.sh and plexus-kind-multi-secondary-iface.sh.
 
 set -euo pipefail
 
 PLEXUS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OVN_KUBERNETES_PATH="${OVN_KUBERNETES_PATH:-}"
 OCI_BIN="${OCI_BIN:-docker}"
+KIND_IMAGE="${KIND_IMAGE:-kindest/node}"
+K8S_VERSION="${K8S_VERSION:-v1.36.1}"
 
 # Keep in sync with ovn-kubernetes/contrib/kind-common.sh FRR constants.
 readonly FRR_K8S_GIT_REF="b43efcb206be"
@@ -91,9 +93,11 @@ networking:
   serviceSubnet: "${svc_cidr}"
 nodes:
   - role: control-plane
+    image: ${KIND_IMAGE}:${K8S_VERSION}
 EOF
   for ((i = 0; i < workers; i++)); do
     echo "  - role: worker"
+    echo "    image: ${KIND_IMAGE}:${K8S_VERSION}"
   done
 }
 
@@ -130,6 +134,32 @@ configure_node_sysctl() {
     $OCI_BIN exec "$node" sysctl -w net.ipv4.conf.all.rp_filter=2
     $OCI_BIN exec "$node" sysctl -w net.ipv4.conf.default.rp_filter=2
   done
+}
+
+# create_kind_cluster NAME KUBECONFIG NETWORK [WORKERS]
+# Creates a KIND cluster on NETWORK (idempotent), loads the OVN image, and
+# configures sysctl. Caller must call compute_cidrs beforehand to set POD_CIDR,
+# SVC_CIDR, and DOCKER_NETWORK_SUBNET.
+create_kind_cluster() {
+  local name=$1 kubeconfig=$2 network=$3 workers=${4:-1}
+
+  create_docker_network "$network" "$DOCKER_NETWORK_SUBNET"
+  echo "--- Cluster ${name}: pods=${POD_CIDR} svcs=${SVC_CIDR}" \
+       "net=${network} (${DOCKER_NETWORK_SUBNET}) ---"
+
+  if kind get clusters 2>/dev/null | grep -qx "$name"; then
+    echo "Cluster ${name} already exists, skipping creation"
+  else
+    generate_kind_config "$workers" "$POD_CIDR" "$SVC_CIDR" | \
+      KIND_EXPERIMENTAL_DOCKER_NETWORK="$network" \
+      kind create cluster \
+        --name "$name" \
+        --kubeconfig "$kubeconfig" \
+        --config /dev/stdin
+  fi
+
+  load_ovn_image "$name"
+  configure_node_sysctl "$name"
 }
 
 build_ovn_image() {
@@ -385,10 +415,10 @@ configure_frr_k8s_peering() {
   # The webhook declares readiness before its endpoint is actually serving,
   # so curl from inside the control-plane node to verify.
   local r=0
-  timeout 120s bash -x <<PROBE || r=$?
+  timeout 300s bash -x <<PROBE || r=$?
 while true; do
   CLUSTER_IP=\$(KUBECONFIG="$kubeconfig" kubectl get svc -n frr-k8s-system frr-k8s-webhook-service -o jsonpath='{.spec.clusterIP}')
-  $OCI_BIN exec "${cluster_name}-control-plane" curl -ksS --connect-timeout 10 "https://\${CLUSTER_IP}" && exit 0
+  $OCI_BIN exec "${cluster_name}-control-plane" curl -ksS --connect-timeout 30 "https://\${CLUSTER_IP}" && exit 0
   echo "Waiting for frr-k8s webhook..."
   sleep 1
 done
@@ -470,6 +500,18 @@ deploy_plexus_controller() {
   fi
 }
 
+# deploy_ovnk_to_cluster NAME INDEX KUBECONFIG NETWORK FRR_NETWORK
+# Installs frr-k8s, OVN-Kubernetes, and configures BGP peering on one cluster.
+deploy_ovnk_to_cluster() {
+  local name=$1 index=$2 kubeconfig=$3 network=$4 frr_network=$5
+
+  compute_cidrs "$index"
+  install_frr_k8s "$kubeconfig"
+  helm_install_ovnk "$name" "$kubeconfig" "$network"
+  wait_for_ovnk "$kubeconfig"
+  configure_frr_k8s_peering "$kubeconfig" "$name" "$frr_network"
+}
+
 wait_for_ovnk() {
   local kubeconfig=$1
   echo "Waiting for OVN-Kubernetes pods..."
@@ -504,6 +546,32 @@ connect_frr_to_network() {
   $OCI_BIN network connect "$network" plexus-frr
 }
 
+# cleanup_all_plexus_clusters
+# Detects and tears down every kind cluster whose name starts with "plexus",
+# removes their Docker networks and kubeconfigs, and stops the FRR container.
+# Works regardless of whether a single-cluster or multi-cluster deployment was used.
+cleanup_all_plexus_clusters() {
+  local clusters=()
+  mapfile -t clusters < <(kind get clusters 2>/dev/null | grep '^plexus' || true)
+
+  if [ "${#clusters[@]}" -eq 0 ]; then
+    echo "No Plexus KIND clusters found."
+  else
+    echo "Deleting ${#clusters[@]} cluster(s): ${clusters[*]}"
+    for name in "${clusters[@]}"; do
+      kind delete cluster --name "$name" 2>/dev/null || true
+      rm -f "${HOME}/${name}.conf"
+      # Multi-cluster script names network == cluster (e.g. plexus-hub).
+      # Single-cluster script names network plexus-<cluster> (e.g. plexus-plexus).
+      # Try both; delete_docker_network is a no-op for networks that don't exist.
+      delete_docker_network "$name"
+      delete_docker_network "plexus-${name}"
+    done
+  fi
+
+  cleanup_external_frr
+}
+
 cleanup_external_frr() {
   if $OCI_BIN ps -a --format '{{.Names}}' | grep -Eq '^plexus-frr$'; then
     echo "Removing external FRR container..."
@@ -532,7 +600,8 @@ create_spoke_secret() {
 
   local patched_kubeconfig
   patched_kubeconfig=$(echo "$raw_kubeconfig" | \
-    sed "s|server: https://127.0.0.1:[0-9]*|server: ${spoke_api_url}|")
+    sed "s|server: https://127.0.0.1:[0-9]*|server: ${spoke_api_url}|" | \
+    sed 's|    certificate-authority-data:.*|    insecure-skip-tls-verify: true|')
 
   KUBECONFIG="$hub_kubeconfig" kubectl create namespace plexus-system 2>/dev/null || true
 

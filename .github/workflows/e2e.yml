@@ -1,0 +1,60 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e-kind-multi-secondary-iface:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install kind
+        run: go install sigs.k8s.io/kind@v0.32.0
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Check out ovn-kubernetes
+        uses: actions/checkout@v4
+        with:
+          repository: ovn-kubernetes/ovn-kubernetes
+          path: ovn-kubernetes
+
+      - name: Build binaries
+        run: make build
+
+      - name: Deploy kind multi-cluster (hub + 1 spoke, secondary interface)
+        env:
+          OVN_KUBERNETES_PATH: ${{ github.workspace }}/ovn-kubernetes
+        run: make kind-multi-secondary-iface
+
+      - name: Run e2e tests
+        run: make e2e-multi
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          for cluster in plexus-hub plexus-spoke-1; do
+            kc="${HOME}/${cluster}.conf"
+            [ -f "$kc" ] || continue
+            echo "=== ${cluster}: all pods ==="
+            kubectl --kubeconfig "$kc" get pods -A 2>/dev/null || true
+            echo "=== ${cluster}: plexus-controller logs ==="
+            kubectl --kubeconfig "$kc" logs -n plexus-system \
+              -l app.kubernetes.io/name=plexus-controller --tail=150 2>/dev/null || true
+            echo "=== ${cluster}: ovnkube-node logs ==="
+            kubectl --kubeconfig "$kc" logs -n ovn-kubernetes \
+              -l app=ovnkube-node --tail=50 2>/dev/null || true
+            echo "=== ${cluster}: frr-k8s-daemon logs ==="
+            kubectl --kubeconfig "$kc" logs -n frr-k8s-system \
+              -l app=frr-k8s-daemon --tail=50 2>/dev/null || true
+          done

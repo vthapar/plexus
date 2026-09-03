@@ -21,6 +21,7 @@ source "${SCRIPT_DIR}/plexus-kind-common.sh"
 CLUSTER_NAME="plexus"
 WORKERS=1
 SKIP_BUILD=false
+FORCE_BUILD=false
 DELETE=false
 
 while [[ $# -gt 0 ]]; do
@@ -34,20 +35,17 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [ "$DELETE" = true ]; then
+  echo "=== Deleting all Plexus clusters ==="
+  cleanup_all_plexus_clusters
+  echo "Done."
+  exit 0
+fi
+
 KUBECONFIG_FILE="${HOME}/${CLUSTER_NAME}.conf"
 export KUBECONFIG="$KUBECONFIG_FILE"
 
 DOCKER_NET="plexus-${CLUSTER_NAME}"
-
-if [ "$DELETE" = true ]; then
-  echo "=== Deleting cluster ${CLUSTER_NAME} ==="
-  kind delete cluster --name "$CLUSTER_NAME" 2>/dev/null || true
-  cleanup_external_frr
-  delete_docker_network "$DOCKER_NET"
-  rm -f "$KUBECONFIG_FILE"
-  echo "Done."
-  exit 0
-fi
 
 resolve_ovn_kubernetes_path
 echo "Using OVN-Kubernetes from: ${OVN_KUBERNETES_PATH}"
@@ -62,31 +60,12 @@ else
 fi
 
 compute_cidrs "${CIDR_INDEX:-0}"
-echo "Pod CIDR: ${POD_CIDR}, Service CIDR: ${SVC_CIDR}"
 
 echo "=== Creating KIND cluster: ${CLUSTER_NAME} ==="
-create_docker_network "$DOCKER_NET" "$DOCKER_NETWORK_SUBNET"
-kind_config=$(generate_kind_config "$WORKERS" "$POD_CIDR" "$SVC_CIDR")
-
-if kind get clusters 2>/dev/null | grep -qx "$CLUSTER_NAME"; then
-  echo "Cluster ${CLUSTER_NAME} already exists, skipping creation"
-else
-  echo "$kind_config" | \
-    KIND_EXPERIMENTAL_DOCKER_NETWORK="$DOCKER_NET" \
-    kind create cluster \
-      --name "$CLUSTER_NAME" \
-      --kubeconfig "$KUBECONFIG_FILE" \
-      --config /dev/stdin
-fi
-
-load_ovn_image "$CLUSTER_NAME"
-configure_node_sysctl "$CLUSTER_NAME"
+create_kind_cluster "$CLUSTER_NAME" "$KUBECONFIG_FILE" "$DOCKER_NET" "$WORKERS"
 
 deploy_external_frr "$KUBECONFIG_FILE"
-install_frr_k8s "$KUBECONFIG_FILE"
-helm_install_ovnk "$CLUSTER_NAME" "$KUBECONFIG_FILE" "$DOCKER_NET"
-wait_for_ovnk "$KUBECONFIG_FILE"
-configure_frr_k8s_peering "$KUBECONFIG_FILE" "$CLUSTER_NAME" "$DOCKER_NET"
+deploy_ovnk_to_cluster "$CLUSTER_NAME" "${CIDR_INDEX:-0}" "$KUBECONFIG_FILE" "$DOCKER_NET" "$DOCKER_NET"
 deploy_plexus_controller "$CLUSTER_NAME" "$KUBECONFIG_FILE" "$DOCKER_NETWORK_SUBNET"
 
 echo ""
