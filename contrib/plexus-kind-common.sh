@@ -68,7 +68,14 @@ compute_cidrs() {
 
 docker_network_cidr() {
   local name=$1
-  $OCI_BIN network inspect "$name" --format '{{(index .IPAM.Config 0).Subnet}}'
+  local cidr
+  cidr=$($OCI_BIN network inspect "$name" --format '{{json .IPAM.Config}}' | \
+    jq -r '[.[].Subnet | select(contains(":") | not)][0] // empty')
+  if [ -z "$cidr" ]; then
+    echo "error: Docker network ${name} has no IPv4 subnet" >&2
+    return 1
+  fi
+  echo "$cidr"
 }
 
 create_docker_network() {
@@ -537,7 +544,8 @@ create_spoke_secret() {
 
   local patched_kubeconfig
   patched_kubeconfig=$(echo "$raw_kubeconfig" | \
-    sed "s|server: https://127.0.0.1:[0-9]*|server: ${spoke_api_url}|")
+    sed "s|server: https://127.0.0.1:[0-9]*|server: ${spoke_api_url}|" | \
+    sed 's|    certificate-authority-data:.*|    insecure-skip-tls-verify: true|')
 
   KUBECONFIG="$hub_kubeconfig" kubectl create namespace plexus-system 2>/dev/null || true
 
