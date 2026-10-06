@@ -140,7 +140,7 @@ func (r *ANDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		// built-in exponential backoff rate limiter (5ms to ~16min).
 		// This avoids custom backoff logic and follows the standard
 		// controller-runtime pattern for transient not-ready states.
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{Requeue: true}, nil //nolint:staticcheck // intentional: leverages workqueue exponential backoff
 	}
 	return ctrl.Result{}, nil
 }

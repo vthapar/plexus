@@ -1,5 +1,5 @@
-CONTROLLER_GEN ?= go tool controller-gen
-GOLANGCI_LINT ?= golangci-lint
+CONTROLLER_GEN ?= bin/controller-gen
+GOLANGCI_LINT ?= bin/golangci-lint
 
 IMG ?= plexus-controller:latest
 
@@ -12,7 +12,7 @@ help: ## Display this help
 ##@ Code Generation
 
 .PHONY: generate
-generate: ## Generate deepcopy methods, CRD manifests, RBAC, and sync to Helm chart
+generate: bin/controller-gen ## Generate deepcopy methods, CRD manifests, RBAC, and sync to Helm chart
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./api/..."
 	$(CONTROLLER_GEN) crd paths="./api/..." output:crd:artifacts:config=config/crd
 	$(CONTROLLER_GEN) rbac:roleName=plexus-controller paths="./internal/controller/..." output:rbac:artifacts:config=config/rbac
@@ -29,7 +29,7 @@ generate: ## Generate deepcopy methods, CRD manifests, RBAC, and sync to Helm ch
 	} > helm/plexus/templates/clusterrole.yaml
 
 .PHONY: manifests
-manifests: ## Generate CRD manifests only
+manifests: bin/controller-gen ## Generate CRD manifests only
 	$(CONTROLLER_GEN) crd paths="./api/..." output:crd:artifacts:config=config/crd
 
 .PHONY: verify-codegen
@@ -42,6 +42,12 @@ verify-codegen: generate ## Verify generated files are up to date
 
 ##@ Development
 
+bin/controller-gen: tools/go.mod tools/go.sum ## Install controller-gen from the tools module
+	GOBIN=$(CURDIR)/bin go -C tools install sigs.k8s.io/controller-tools/cmd/controller-gen
+
+bin/golangci-lint: tools/go.mod tools/go.sum ## Install golangci-lint from the tools module
+	GOBIN=$(CURDIR)/bin go -C tools install github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+
 .PHONY: fmt
 fmt: ## Run go fmt
 	go fmt ./...
@@ -51,14 +57,16 @@ vet: ## Run go vet
 	go vet ./...
 
 .PHONY: lint
-lint: fmt vet ## Run linters
+lint: fmt vet bin/golangci-lint ## Run linters
 	$(GOLANGCI_LINT) run ./...
 
 .PHONY: lint-api
-lint-api: ## Run kube-api-linter on API types
-	@if [ ! -f bin/golangci-lint-kube-api-linter ]; then \
+lint-api: bin/golangci-lint ## Run kube-api-linter on API types
+	@if [ ! -f bin/golangci-lint-kube-api-linter ] || \
+	   [ tools/.custom-gcl.yml -nt bin/golangci-lint-kube-api-linter ]; then \
 		echo "Building kube-api-linter..."; \
-		$(GOLANGCI_LINT) custom --custom-gcl-config hack/lint/.custom-gcl.yml; \
+		mkdir -p bin; \
+		cd tools && $(CURDIR)/$(GOLANGCI_LINT) custom; \
 	fi
 	bin/golangci-lint-kube-api-linter run --config hack/lint/.golangci-api.yml ./api/...
 
