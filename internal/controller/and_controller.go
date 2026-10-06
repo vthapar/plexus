@@ -91,7 +91,10 @@ func (r *ANDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 
-	noSubnets := len(and.Spec.Subnets) == 0
+	noSubnets := len(and.Subnets()) == 0
+	if and.Status == nil {
+		and.Status = &v1beta1.AdministrativeNetworkDomainStatus{}
+	}
 
 	result, err := r.Backend.Reconcile(ctx, and)
 	if err != nil {
@@ -127,7 +130,7 @@ func (r *ANDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			Type:               "Ready",
 			Status:             metav1.ConditionTrue,
 			Reason:             "Reconciled",
-			Message:            fmt.Sprintf("All %d subnets reconciled by %s backend", len(and.Spec.Subnets), r.Backend.Name()),
+			Message:            fmt.Sprintf("All %d subnets reconciled by %s backend", len(and.Subnets()), r.Backend.Name()),
 			ObservedGeneration: and.Generation,
 		})
 	}

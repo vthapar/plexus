@@ -44,10 +44,11 @@ func (b *OVNKubernetesBackend) Name() string {
 }
 
 func (b *OVNKubernetesBackend) Reconcile(ctx context.Context, and *v1beta1.AdministrativeNetworkDomain) (backend.Result, error) {
-	b.log.Info("reconciling AND", "name", and.Name, "subnets", len(and.Spec.Subnets))
+	subnets := and.Subnets()
+	b.log.Info("reconciling AND", "name", and.Name, "subnets", len(subnets))
 
-	for i := range and.Spec.Subnets {
-		subnet := &and.Spec.Subnets[i]
+	for i := range subnets {
+		subnet := &subnets[i]
 		clusters, err := b.targetClusters(subnet)
 		if err != nil {
 			return backend.Result{}, fmt.Errorf("resolving clusters for subnet %q: %w", subnet.Name, err)
@@ -119,7 +120,7 @@ func (b *OVNKubernetesBackend) Delete(ctx context.Context, and *v1beta1.Administ
 func (b *OVNKubernetesBackend) targetClusters(subnet *v1beta1.Subnet) ([]multicluster.ClusterInfo, error) {
 	var selector *metav1.LabelSelector
 	if subnet.AvailabilityZone != nil {
-		selector = &subnet.AvailabilityZone.ClusterSelector
+		selector = subnet.AvailabilityZone.ClusterSelector
 	}
 	return b.inventory.MatchClusters(selector)
 }
@@ -138,8 +139,9 @@ func (b *OVNKubernetesBackend) garbageCollectSubnets(ctx context.Context, and *v
 		return err
 	}
 
-	desired := make(map[string]struct{}, len(and.Spec.Subnets))
-	for _, s := range and.Spec.Subnets {
+	subnets := and.Subnets()
+	desired := make(map[string]struct{}, len(subnets))
+	for _, s := range subnets {
 		desired[s.Name] = struct{}{}
 	}
 

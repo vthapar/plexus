@@ -39,11 +39,12 @@ func newDescribeCommand() *cobra.Command {
 				formatDuration(time.Since(and.CreationTimestamp.Time))); err != nil {
 				return err
 			}
-			if _, err := fmt.Fprintf(out, "Subnets:      %d\n", len(and.Spec.Subnets)); err != nil {
+			subnets := and.Subnets()
+			if _, err := fmt.Fprintf(out, "Subnets:      %d\n", len(subnets)); err != nil {
 				return err
 			}
 
-			if len(and.Spec.Subnets) > 0 {
+			if len(subnets) > 0 {
 				if _, err := fmt.Fprintln(out); err != nil {
 					return err
 				}
@@ -51,11 +52,11 @@ func newDescribeCommand() *cobra.Command {
 				if _, err := fmt.Fprintln(w, "  SUBNET\tCIDRS\tTYPE\tAVAILABILITY ZONE"); err != nil {
 					return err
 				}
-				for _, s := range and.Spec.Subnets {
+				for _, s := range subnets {
 					if _, err := fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n",
 						s.Name,
 						cidrStrings(s.CIDRs),
-						s.Type,
+						s.TypeValue(),
 						formatAZ(s.AvailabilityZone)); err != nil {
 						return err
 					}
@@ -65,7 +66,7 @@ func newDescribeCommand() *cobra.Command {
 				}
 			}
 
-			if len(and.Status.Conditions) > 0 {
+			if and.Status != nil && len(and.Status.Conditions) > 0 {
 				if _, err := fmt.Fprintln(out); err != nil {
 					return err
 				}
@@ -103,7 +104,7 @@ func formatAZ(az *v1beta1.AvailabilityZone) string {
 
 	var parts []string
 
-	if len(az.ClusterSelector.MatchLabels) > 0 {
+	if az.ClusterSelector != nil && len(az.ClusterSelector.MatchLabels) > 0 {
 		for k, v := range az.ClusterSelector.MatchLabels {
 			parts = append(parts, fmt.Sprintf("cluster(%s=%s)", k, v))
 		}

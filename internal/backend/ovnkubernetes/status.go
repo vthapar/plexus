@@ -47,8 +47,9 @@ func (b *OVNKubernetesBackend) checkClusterResourceStatus(ctx context.Context, a
 		}, nil
 	}
 
-	for i := range and.Spec.Subnets {
-		name := cudnName(and, &and.Spec.Subnets[i])
+	subnets := and.Subnets()
+	for i := range subnets {
+		name := cudnName(and, &subnets[i])
 		cudn := &udnv1.ClusterUserDefinedNetwork{}
 		if err := cl.Get(ctx, client.ObjectKey{Name: name}, cudn); err != nil {
 			return backend.Result{}, fmt.Errorf("getting CUDN %q status on cluster %q: %w", name, clusterName, err)
@@ -68,8 +69,8 @@ func (b *OVNKubernetesBackend) checkClusterResourceStatus(ctx context.Context, a
 	}
 
 	hasEVPN := false
-	for i := range and.Spec.Subnets {
-		if and.Spec.Subnets[i].Type != v1beta1.SubnetTypeIsolated {
+	for i := range subnets {
+		if subnets[i].TypeValue() != v1beta1.SubnetTypeIsolated {
 			hasEVPN = true
 			break
 		}

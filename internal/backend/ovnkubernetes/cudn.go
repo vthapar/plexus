@@ -64,7 +64,8 @@ func (b *OVNKubernetesBackend) buildCUDN(
 			VNI: int32(vnis.MACVRF),
 		},
 	}
-	if subnet.Type != v1beta1.SubnetTypeIsolated && vnis.IPVRF != 0 {
+	subnetType := subnet.TypeValue()
+	if subnetType != v1beta1.SubnetTypeIsolated && vnis.IPVRF != 0 {
 		evpnConfig.IPVRF = &udnv1.VRFConfig{
 			VNI:         int32(vnis.IPVRF),
 			RouteTarget: udnv1.RouteTargetString(domainRouteTarget(and.Name)),
@@ -77,7 +78,7 @@ func (b *OVNKubernetesBackend) buildCUDN(
 			Labels: map[string]string{
 				labelNetworkDomain: and.Name,
 				labelSubnet:        subnet.Name,
-				labelSubnetType:    string(subnet.Type),
+				labelSubnetType:    string(subnetType),
 			},
 		},
 		Spec: udnv1.ClusterUserDefinedNetworkSpec{
@@ -114,7 +115,7 @@ func (b *OVNKubernetesBackend) reconcileCUDN(
 	existing := &udnv1.ClusterUserDefinedNetwork{}
 	err := cl.Get(ctx, client.ObjectKey{Name: name}, existing)
 	if apierrors.IsNotFound(err) {
-		vnis, allocErr := b.vniAllocator.AllocateSubnetVNIs(and.Name, subnet.Name, subnet.Type)
+		vnis, allocErr := b.vniAllocator.AllocateSubnetVNIs(and.Name, subnet.Name, subnet.TypeValue())
 		if allocErr != nil {
 			return fmt.Errorf("allocating VNIs for subnet %q: %w", subnet.Name, allocErr)
 		}
@@ -182,7 +183,7 @@ func (b *OVNKubernetesBackend) updateCUDNLabels(
 	desired := map[string]string{
 		labelNetworkDomain: and.Name,
 		labelSubnet:        subnet.Name,
-		labelSubnetType:    string(subnet.Type),
+		labelSubnetType:    string(subnet.TypeValue()),
 	}
 
 	needsUpdate := false
