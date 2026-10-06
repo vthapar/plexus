@@ -40,8 +40,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: PlexusControllerConfigSpec defines the desired configuration
-              for the Plexus operator.
+            description: spec defines the desired configuration for the Plexus operator.
             properties:
               backend:
                 default: ovn-kubernetes
@@ -129,18 +128,15 @@ spec:
                     maxItems: 20
                     minItems: 1
                     type: array
+                    x-kubernetes-list-type: atomic
                 required:
                 - frrConfigurationSelector
                 - vtepCIDRs
                 type: object
-            required:
-            - backend
             type: object
             x-kubernetes-validations:
             - message: ovnKubernetes configuration is required when backend is 'ovn-kubernetes'
               rule: self.backend != 'ovn-kubernetes' || has(self.ovnKubernetes)
-        required:
-        - spec
         type: object
     served: true
     storage: true

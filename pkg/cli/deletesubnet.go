@@ -59,9 +59,10 @@ Examples:
 				return fmt.Errorf("getting AND %q: %w", ndName, err)
 			}
 
+			subnets := and.Subnets()
 			found := false
-			remaining := make([]v1beta1.Subnet, 0, len(and.Spec.Subnets))
-			for _, s := range and.Spec.Subnets {
+			remaining := make([]v1beta1.Subnet, 0, len(subnets))
+			for _, s := range subnets {
 				if s.Name == subnetName {
 					found = true
 					continue

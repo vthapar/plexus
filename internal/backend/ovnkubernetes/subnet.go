@@ -35,7 +35,7 @@ func desiredLabels(and *v1beta1.AdministrativeNetworkDomain, subnet *v1beta1.Sub
 	return map[string]string{
 		labelNetworkDomain: and.Name,
 		labelSubnet:        subnet.Name,
-		labelSubnetType:    string(subnet.Type),
+		labelSubnetType:    string(subnet.TypeValue()),
 		labelPrimaryUDN:    "",
 	}
 }

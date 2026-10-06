@@ -57,7 +57,7 @@ Examples:
 					return fmt.Errorf("--cluster-selector is required when --node-selector is specified")
 				}
 				az = &v1beta1.AvailabilityZone{
-					ClusterSelector: metav1.LabelSelector{MatchLabels: csLabels},
+					ClusterSelector: &metav1.LabelSelector{MatchLabels: csLabels},
 					NodeSelector:    nsLabels,
 				}
 			}
@@ -72,6 +72,10 @@ Examples:
 				return fmt.Errorf("getting AND %q: %w", ndName, err)
 			}
 
+			if and.Spec == nil {
+				and.Spec = &v1beta1.AdministrativeNetworkDomainSpec{}
+			}
+
 			for _, s := range and.Spec.Subnets {
 				if s.Name == subnetName {
 					return fmt.Errorf("subnet %q already exists in AND %q", subnetName, ndName)
@@ -81,7 +85,7 @@ Examples:
 			and.Spec.Subnets = append(and.Spec.Subnets, v1beta1.Subnet{
 				Name:             subnetName,
 				CIDRs:            toCIDRs(cidrs),
-				Type:             st,
+				Type:             &st,
 				AvailabilityZone: az,
 			})
 

@@ -15,12 +15,14 @@ import (
 // +kubebuilder:resource:path=plexuscontrollerconfigs,scope=Cluster,singular=plexuscontrollerconfig
 // +kubebuilder:object:root=true
 type PlexusControllerConfig struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
+	// metadata is the standard object metadata.
+	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// +kubebuilder:validation:Required
-	// +required
-	Spec PlexusControllerConfigSpec `json:"spec"`
+	// spec defines the desired configuration for the Plexus operator.
+	// +optional
+	Spec *PlexusControllerConfigSpec `json:"spec,omitempty"`
 }
 
 // PlexusControllerConfigSpec defines the desired configuration for the Plexus operator.
@@ -30,11 +32,10 @@ type PlexusControllerConfigSpec struct {
 	// backend selects which network backend the operator uses to
 	// translate AdministrativeNetworkDomains into platform resources.
 	//
-	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum="ovn-kubernetes"
-	// +kubebuilder:default="ovn-kubernetes"
-	// +required
-	Backend string `json:"backend"`
+	// +default="ovn-kubernetes"
+	// +optional
+	Backend *string `json:"backend,omitempty"`
 
 	// ovnKubernetes holds configuration specific to the OVN-Kubernetes
 	// backend. Required when backend is "ovn-kubernetes".
@@ -52,11 +53,11 @@ type OVNKubernetesConfig struct {
 	// of all participating clusters so that cross-cluster EVPN
 	// tunnels can be established.
 	//
-	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=20
+	// +listType=atomic
 	// +required
-	VTEPCIDRs []CIDR `json:"vtepCIDRs"`
+	VTEPCIDRs []CIDR `json:"vtepCIDRs,omitempty"`
 
 	// frrConfigurationSelector selects the base FRRConfiguration
 	// resource that RouteAdvertisements reference for BGP peering.
@@ -67,9 +68,8 @@ type OVNKubernetesConfig struct {
 	// The Plexus controller reads the ASN from this FRRConfiguration's
 	// spec.bgp.routers[].asn for use in route-leaking FRR config.
 	//
-	// +kubebuilder:validation:Required
 	// +required
-	FRRConfigurationSelector metav1.LabelSelector `json:"frrConfigurationSelector"`
+	FRRConfigurationSelector *metav1.LabelSelector `json:"frrConfigurationSelector,omitempty"`
 }
 
 // PlexusControllerConfigList contains a list of PlexusControllerConfig resources.

@@ -66,7 +66,7 @@ func main() {
 		setupLog.Error(err, "unable to fetch PlexusControllerConfig 'plexus'")
 		os.Exit(1)
 	}
-	if plexusConfig.Spec.OVNKubernetes == nil {
+	if plexusConfig.Spec == nil || plexusConfig.Spec.OVNKubernetes == nil {
 		setupLog.Error(nil, "PlexusControllerConfig 'plexus' is missing ovnKubernetes configuration")
 		os.Exit(1)
 	}

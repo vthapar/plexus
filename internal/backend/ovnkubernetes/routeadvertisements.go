@@ -20,8 +20,9 @@ func raName(and *v1beta1.AdministrativeNetworkDomain) string {
 
 func (b *OVNKubernetesBackend) reconcileRouteAdvertisements(ctx context.Context, and *v1beta1.AdministrativeNetworkDomain, cl client.Client) error {
 	hasEVPN := false
-	for i := range and.Spec.Subnets {
-		if and.Spec.Subnets[i].Type != v1beta1.SubnetTypeIsolated {
+	subnets := and.Subnets()
+	for i := range subnets {
+		if subnets[i].TypeValue() != v1beta1.SubnetTypeIsolated {
 			hasEVPN = true
 			break
 		}
@@ -64,6 +65,11 @@ func (b *OVNKubernetesBackend) reconcileRouteAdvertisements(ctx context.Context,
 }
 
 func (b *OVNKubernetesBackend) buildRouteAdvertisements(and *v1beta1.AdministrativeNetworkDomain) *rav1.RouteAdvertisements {
+	frrSelector := metav1.LabelSelector{}
+	if b.config != nil && b.config.FRRConfigurationSelector != nil {
+		frrSelector = *b.config.FRRConfigurationSelector
+	}
+
 	return &rav1.RouteAdvertisements{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: raName(and),
@@ -94,7 +100,7 @@ func (b *OVNKubernetesBackend) buildRouteAdvertisements(and *v1beta1.Administrat
 				},
 			},
 			NodeSelector:             metav1.LabelSelector{},
-			FRRConfigurationSelector: b.config.FRRConfigurationSelector,
+			FRRConfigurationSelector: frrSelector,
 			Advertisements:           []rav1.AdvertisementType{rav1.PodNetwork},
 		},
 	}
