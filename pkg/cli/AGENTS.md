@@ -44,7 +44,7 @@
 | `client.go` | Shared `getClient()` using kubeconfig/context flags |
 | `validate.go` | Shared CIDR and subnet type validation |
 | `version.go` | Version subcommand |
-| `create.go` | Create an empty AND |
+| `create.go` | Create an AND with its first subnet |
 | `delete.go` | Delete an AND (with confirmation) |
 | `describe.go` | Rich AND detail view |
 | `addsubnet.go` | Add a subnet to an AND |

@@ -23,9 +23,8 @@ cp bin/kubectl-plexus /usr/local/bin/
 # Install the CRD
 kubectl apply -f config/crd/plexus.io_administrativenetworkdomains.yaml
 
-# Create an AND and add subnets
-plexus create production
-plexus add-subnet production web --cidr 10.0.1.0/24 --type Public
+# Create an AND with its first subnet, then add more subnets
+plexus create production web --cidr 10.0.1.0/24 --type Public
 plexus add-subnet production app --cidr 10.0.10.0/24 --type Private
 plexus add-subnet production db  --cidr 10.0.20.0/24 --type Isolated
 
@@ -35,6 +34,11 @@ kubectl get and
 # Describe an AND
 plexus describe production
 ```
+
+The Helm chart selects an FRRConfiguration labeled
+`plexus.io/frr-configuration: base`, which the KIND scripts create. Set
+`ovnKubernetes.frrConfigurationSelector` in your chart values when using a
+different FRRConfiguration.
 
 ## What It Does
 

@@ -16,6 +16,8 @@ readonly FRR_K8S_UPSTREAM_FRR_IMAGE="quay.io/frrouting/frr:10.4.1"
 readonly FRR_K8S_ALL_IN_ONE_UPSTREAM_FRR_IMAGE="quay.io/frrouting/frr:10.4.3"
 readonly FRR_DEPLOYED_IMAGE="quay.io/frrouting/frr:10.6.0"
 readonly FRR_EXTERNAL_DEMO_IMAGE="${FRR_DEPLOYED_IMAGE}"
+readonly FRR_CONFIG_LABEL_KEY="plexus.io/frr-configuration"
+readonly FRR_CONFIG_LABEL_VALUE="base"
 FRR_K8S_FRR_IMAGE="${FRR_K8S_FRR_IMAGE:-${FRR_DEPLOYED_IMAGE}}"
 FRR_TMP_DIR=""
 
@@ -415,6 +417,8 @@ apiVersion: frrk8s.metallb.io/v1beta1
 kind: FRRConfiguration
 metadata:
   name: receive-all
+  labels:
+    ${FRR_CONFIG_LABEL_KEY}: ${FRR_CONFIG_LABEL_VALUE}
 spec:
   bgp:
     routers:
@@ -452,6 +456,7 @@ deploy_plexus_controller() {
     --set image.repository="${PLEXUS_IMAGE%:*}"
     --set image.tag="${PLEXUS_IMAGE##*:}"
     --set image.pullPolicy=Never
+    --set-json "ovnKubernetes.frrConfigurationSelector.matchLabels={\"${FRR_CONFIG_LABEL_KEY}\":\"${FRR_CONFIG_LABEL_VALUE}\"}"
   )
   if [ ${#vtep_cidrs[@]} -gt 0 ]; then
     local vtep_json

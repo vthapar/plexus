@@ -24,18 +24,18 @@ cp bin/kubectl-plexus /usr/local/bin/
 
 ### `plexus create`
 
-Create an empty AdministrativeNetworkDomain. Subnets are added separately
-with `add-subnet`.
+Create an AdministrativeNetworkDomain with its first subnet. Add more
+subnets with `add-subnet`.
 
 ```bash
-plexus create <name>
+plexus create <name> <subnet-name> --cidr <cidr> [--type <type>]
 ```
 
 **Examples:**
 
 ```bash
-plexus create production
-plexus create staging --context kind-staging
+plexus create production web --cidr 10.0.1.0/24 --type Public
+plexus create staging app --cidr 10.0.10.0/24 --context kind-staging
 ```
 
 ### `plexus delete`
@@ -79,7 +79,7 @@ Subnets:      3
   SUBNET    CIDRS                    TYPE      AVAILABILITY ZONE
   web       10.0.1.0/24              Public    cluster(env=prod)
   backend   10.0.2.0/24,fd00::2/64   Private   <none>
-  db        10.0.3.0/24              Isolated  node(topology.kubernetes.io/zone=rack-a)
+  db        10.0.3.0/24              Isolated  cluster(env=prod), node(topology.kubernetes.io/zone=rack-a)
 
 Conditions:
   TYPE    STATUS  REASON      MESSAGE                                      LAST TRANSITION
@@ -104,10 +104,13 @@ plexus add-subnet <network-domain> <subnet-name> --cidr <cidr> [--type <type>]
 **Validation:**
 
 - CIDRs are validated with `net.ParseCIDR`
+- CIDRs must use the network address (for example, `10.0.1.0/24`)
 - At most two CIDRs (one IPv4, one IPv6 for dual-stack)
 - Two CIDRs of the same address family are rejected
 - Subnet type must be one of the known enum values
 - Duplicate subnet names within an AND are rejected
+- Subnet names and combined AND/subnet names must be valid DNS labels of at most 63 characters
+- An AND can contain at most 100 subnets
 
 **Examples:**
 
@@ -121,6 +124,7 @@ plexus add-subnet production dual --cidr 10.0.3.0/24 --cidr fd00::3/64 --type Pr
 
 Delete a subnet from an AdministrativeNetworkDomain. This triggers the
 controller to clean up all backend resources associated with the subnet.
+The last subnet cannot be removed; delete the AND instead.
 Prompts for confirmation unless `--yes` is specified.
 
 ```bash
@@ -162,8 +166,8 @@ When `kubectl-plexus` is on your `PATH`, all commands work as kubectl
 subcommands:
 
 ```bash
-kubectl plexus create production
-kubectl plexus add-subnet production web --cidr 10.0.1.0/24
+kubectl plexus create production web --cidr 10.0.1.0/24
+kubectl plexus add-subnet production app --cidr 10.0.2.0/24
 kubectl plexus describe production
 kubectl plexus delete production --yes
 ```

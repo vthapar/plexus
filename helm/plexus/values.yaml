@@ -27,6 +27,9 @@ ovnKubernetes:
     - "172.18.0.0/16"
 
   # Label selector matching the base FRRConfiguration resource
-  # that RouteAdvertisements reference for BGP peering.
+  # that RouteAdvertisements reference for BGP peering. The KIND scripts
+  # create a receive-all FRRConfiguration with this label. Override the
+  # selector when using a different FRRConfiguration.
   frrConfigurationSelector:
-    matchLabels: {}
+    matchLabels:
+      plexus.io/frr-configuration: base

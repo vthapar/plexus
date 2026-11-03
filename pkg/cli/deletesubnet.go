@@ -72,6 +72,9 @@ Examples:
 			if !found {
 				return fmt.Errorf("subnet %q not found in AND %q", subnetName, ndName)
 			}
+			if len(remaining) == 0 {
+				return fmt.Errorf("cannot delete the last subnet from AND %q; delete the AND instead", ndName)
+			}
 
 			patchBytes, err := json.Marshal(map[string]interface{}{
 				"spec": map[string]interface{}{
