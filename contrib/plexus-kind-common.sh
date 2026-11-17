@@ -16,6 +16,8 @@ readonly FRR_K8S_UPSTREAM_FRR_IMAGE="quay.io/frrouting/frr:10.4.1"
 readonly FRR_K8S_ALL_IN_ONE_UPSTREAM_FRR_IMAGE="quay.io/frrouting/frr:10.4.3"
 readonly FRR_DEPLOYED_IMAGE="quay.io/frrouting/frr:10.6.0"
 readonly FRR_EXTERNAL_DEMO_IMAGE="${FRR_DEPLOYED_IMAGE}"
+readonly FRR_CONFIG_LABEL_KEY="plexus.io/frr-configuration"
+readonly FRR_CONFIG_LABEL_VALUE="base"
 FRR_K8S_FRR_IMAGE="${FRR_K8S_FRR_IMAGE:-${FRR_DEPLOYED_IMAGE}}"
 FRR_TMP_DIR=""
 
@@ -66,7 +68,14 @@ compute_cidrs() {
 
 docker_network_cidr() {
   local name=$1
-  $OCI_BIN network inspect "$name" --format '{{(index .IPAM.Config 0).Subnet}}'
+  local cidr
+  cidr=$($OCI_BIN network inspect "$name" --format '{{json .IPAM.Config}}' | \
+    jq -r '[.[].Subnet | select(contains(":") | not)][0] // empty')
+  if [ -z "$cidr" ]; then
+    echo "error: Docker network ${name} has no IPv4 subnet" >&2
+    return 1
+  fi
+  echo "$cidr"
 }
 
 create_docker_network() {
@@ -415,6 +424,8 @@ apiVersion: frrk8s.metallb.io/v1beta1
 kind: FRRConfiguration
 metadata:
   name: receive-all
+  labels:
+    ${FRR_CONFIG_LABEL_KEY}: ${FRR_CONFIG_LABEL_VALUE}
 spec:
   bgp:
     routers:
@@ -452,6 +463,7 @@ deploy_plexus_controller() {
     --set image.repository="${PLEXUS_IMAGE%:*}"
     --set image.tag="${PLEXUS_IMAGE##*:}"
     --set image.pullPolicy=Never
+    --set-json "ovnKubernetes.frrConfigurationSelector.matchLabels={\"${FRR_CONFIG_LABEL_KEY}\":\"${FRR_CONFIG_LABEL_VALUE}\"}"
   )
   if [ ${#vtep_cidrs[@]} -gt 0 ]; then
     local vtep_json
@@ -532,7 +544,8 @@ create_spoke_secret() {
 
   local patched_kubeconfig
   patched_kubeconfig=$(echo "$raw_kubeconfig" | \
-    sed "s|server: https://127.0.0.1:[0-9]*|server: ${spoke_api_url}|")
+    sed "s|server: https://127.0.0.1:[0-9]*|server: ${spoke_api_url}|" | \
+    sed 's|    certificate-authority-data:.*|    insecure-skip-tls-verify: true|')
 
   KUBECONFIG="$hub_kubeconfig" kubectl create namespace plexus-system 2>/dev/null || true
 

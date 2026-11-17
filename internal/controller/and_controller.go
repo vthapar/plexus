@@ -91,7 +91,6 @@ func (r *ANDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 
-	noSubnets := len(and.Spec.Subnets) == 0
 	result, err := r.Backend.Reconcile(ctx, and)
 	if err != nil {
 		meta.SetStatusCondition(&and.Status.Conditions, metav1.Condition{
@@ -105,15 +104,7 @@ func (r *ANDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, fmt.Errorf("backend reconcile: %w", err)
 	}
 
-	if noSubnets {
-		meta.SetStatusCondition(&and.Status.Conditions, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionFalse,
-			Reason:             "NoSubnets",
-			Message:            "No subnets defined; domain is awaiting subnet configuration",
-			ObservedGeneration: and.Generation,
-		})
-	} else if result.StatusReason != "" {
+	if result.StatusReason != "" {
 		meta.SetStatusCondition(&and.Status.Conditions, metav1.Condition{
 			Type:               "Ready",
 			Status:             metav1.ConditionFalse,

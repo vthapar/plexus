@@ -5,6 +5,8 @@ import (
 	"net"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/validation"
+
 	v1beta1 "github.com/ovn-kubernetes/plexus/api/administrativenetworkdomain/v1beta1"
 )
 
@@ -33,9 +35,12 @@ func validateCIDRs(cidrs []string) error {
 
 	hasV4, hasV6 := false, false
 	for _, cidr := range cidrs {
-		ip, _, err := net.ParseCIDR(cidr)
+		ip, network, err := net.ParseCIDR(cidr)
 		if err != nil {
 			return fmt.Errorf("invalid CIDR %q: %w", cidr, err)
+		}
+		if !ip.Equal(network.IP) {
+			return fmt.Errorf("invalid CIDR %q: use the network address %s", cidr, network.String())
 		}
 		if ip.To4() != nil {
 			if hasV4 {
@@ -48,6 +53,20 @@ func validateCIDRs(cidrs []string) error {
 			}
 			hasV6 = true
 		}
+	}
+	return nil
+}
+
+func validateSubnetName(domainName, subnetName string) error {
+	if errs := validation.IsDNS1123Label(subnetName); len(errs) > 0 {
+		return fmt.Errorf("invalid subnet name %q: %s", subnetName, strings.Join(errs, ", "))
+	}
+	combined := domainName + "-" + subnetName
+	if len(combined) > 63 {
+		return fmt.Errorf("combined AND and subnet name %q exceeds 63 characters", combined)
+	}
+	if errs := validation.IsDNS1123Label(combined); len(errs) > 0 {
+		return fmt.Errorf("invalid combined AND and subnet name %q: %s", combined, strings.Join(errs, ", "))
 	}
 	return nil
 }

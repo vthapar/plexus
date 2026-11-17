@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -110,6 +111,13 @@ func formatAZ(az v1beta1.AvailabilityZone) string {
 			parts = append(parts, fmt.Sprintf("cluster(%s=%s)", k, v))
 		}
 	}
+	for _, expr := range cs.MatchExpressions {
+		item := fmt.Sprintf("cluster(%s %s", expr.Key, expr.Operator)
+		if len(expr.Values) > 0 {
+			item += " " + strings.Join(expr.Values, ",")
+		}
+		parts = append(parts, item+")")
+	}
 	if len(az.NodeSelector) > 0 {
 		for k, v := range az.NodeSelector {
 			parts = append(parts, fmt.Sprintf("node(%s=%s)", k, v))
@@ -119,6 +127,7 @@ func formatAZ(az v1beta1.AvailabilityZone) string {
 	if len(parts) == 0 {
 		return "<empty>"
 	}
+	sort.Strings(parts)
 	return strings.Join(parts, ", ")
 }
 

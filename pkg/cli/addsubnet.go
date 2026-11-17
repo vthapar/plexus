@@ -33,6 +33,9 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ndName := args[0]
 			subnetName := args[1]
+			if err := validateSubnetName(ndName, subnetName); err != nil {
+				return err
+			}
 
 			if err := validateCIDRs(cidrs); err != nil {
 				return err
@@ -70,6 +73,9 @@ Examples:
 			and := &v1beta1.AdministrativeNetworkDomain{}
 			if err := c.Get(context.TODO(), client.ObjectKey{Name: ndName}, and); err != nil {
 				return fmt.Errorf("getting AND %q: %w", ndName, err)
+			}
+			if len(and.Spec.Subnets) >= 100 {
+				return fmt.Errorf("AND %q already has the maximum of 100 subnets", ndName)
 			}
 
 			for _, s := range and.Spec.Subnets {
